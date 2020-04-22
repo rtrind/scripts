@@ -31,6 +31,29 @@
  * https://github.com/sponsors/irgendwr
  * 
  */
+
+/*
+ * Local modifications:
+ *   Added aliases
+     - 'np' for 'playing'
+     - 'skip' for 'next'
+     - 'summon' for 'join'
+     - 'disconnect' for 'leave'
+ *   'play' now enqueues by default instead of interrupting the song playing
+ *   'queue' now shows the queue list instead of modifiying the queue
+ *   'queuenext' now properly adds the song to the top of the queue. Unfortunately I found no way of queueing something from ytdl, so no support for this yet
+ *   'volume' now shows the current volume if no parameter is informed
+ *   Removed commands
+     - 'say'
+     - 'sayex'
+     - 'ttsurl'
+     - 'ttslocale'
+     - 'yt'
+     - 'ytstream'
+     - 'ytdl'
+     - 'qyt'
+     - 'qytdl'
+ */
 registerPlugin({
     name: 'SinusBot Commands',
     version: '1.1.2',
@@ -358,6 +381,7 @@ registerPlugin({
             });
 
             createCommand('playing')
+            .alias('np')
             .help('Show what\'s currently playing')
             .manual('Show what\'s currently playing')
             .exec((client, args, reply, ev) => {
@@ -424,6 +448,7 @@ registerPlugin({
             });
 
             createCommand('next')
+            .alias('skip')
             .help('Play the next track')
             .manual('Plays the next track (only when a playlist or queue is active).')
             .checkPermission(requirePrivileges(PLAYBACK))
@@ -446,7 +471,7 @@ registerPlugin({
             .alias('s')
             .addArgument(args => args.rest.setName('searchstring'))
             .help('Search for tracks')
-            .manual('Searches for tracks, returns 20 results at most.')
+            .manual('Searches for tracks.')
             .checkPermission(requirePrivileges(PLAYBACK, ENQUEUE))
             .exec((client, args, reply, ev) => {
                 // print syntax if no searchstring given
@@ -462,22 +487,24 @@ registerPlugin({
                     return;
                 }
 
-                const response = tracks.map(formatTrack).join("\n")
-                reply(response);
+                let response = tracks.map(formatResultTrackList)
+                while (response.length) {
+                    reply(response.splice(0, 20).join('\n'));   
+                }
                 successReaction(ev, reply);
             });
 
             createCommand('play')
             .alias('p')
-            .addArgument(args => args.rest.setName('idORsearchstring', 'searchstring / uuid'))
+            .addArgument(args => args.rest.setName('whattoplay', 'searchstring / uuid / url'))
             .help('Play a track by its id or name')
             .manual('Plays a track by its id or searches for a track and plays the first match.')
             .checkPermission(requirePrivileges(PLAYBACK))
             .exec((client, args, reply, ev) => {
-                let query = args.idORsearchstring;
-                // print syntax if no idORsearchstring given
+                let query = args.whattoplay;
+                // print syntax if no whattoplay given
                 if (!query) {
-                    reply(USAGE_PREFIX + 'play <searchstring / uuid>');
+                    reply(USAGE_PREFIX + 'play <searchstring / uuid / url>');
                     return;
                 }
 
@@ -495,11 +522,12 @@ registerPlugin({
                                     return;
                                 }
                             }
-                            if (media.ytStream(query)) {
-                                successReaction(ev, reply);
-                                return;
-                            }
-                            const jobId = media.yt(query);
+                            // if (media.ytStream(query)) {
+                            //     successReaction(ev, reply);
+                            //     return;
+                            // }
+                            // const jobId = media.yt(query);
+                            const jobId = media.enqueueYt(query);
                             handleYT(jobId, ev, reply);
                             return;
                         }
@@ -507,8 +535,8 @@ registerPlugin({
                     }
                 }
 
-                track.play();
-                reply(`Playing ${formatTrack(track)}`);
+                track.enqueue();
+                reply(`Added '${formatTrack(track)}' to the queue`);
                 successReaction(ev, reply);
             });
 
@@ -540,38 +568,54 @@ registerPlugin({
                 successReaction(ev, reply);
             });
 
+            // createCommand('queue')
+            // .alias('q')
+            // .addArgument(args => args.rest.setName('idORsearchstring', 'searchstring / uuid').optional(true))
+            // .help('Enqueue a track or resume queue')
+            // .manual('Enqueue a track by its id or search for a track and enqueue the first match. When no track is provided it wil resume the queue.')
+            // .checkPermission(requirePrivileges(PLAYBACK, ENQUEUE))
+            // .exec((client, args, reply, ev) => {
+            //     if (!args.idORsearchstring) {
+            //         if (!audio.isPlaying()) {
+            //             media.playQueueNext();
+            //         }
+            //         return;
+            //     }
+
+            //     let track = media.getTrackByID(args.idORsearchstring);
+            //     if (!track) {
+            //         const tracks = media.search(args.idORsearchstring);
+            //         if (tracks.length > 0) {
+            //             track = tracks[0];
+            //         } else {
+            //             reply('Sorry, nothing found.');
+            //             return;
+            //         }
+            //     }
+
+            //     track.enqueue();
+            //     reply(`Added "${formatTrack(track)}" to the queue`);
+            //     successReaction(ev, reply);
+            // });
+
             createCommand('queue')
             .alias('q')
-            .addArgument(args => args.rest.setName('idORsearchstring', 'searchstring / uuid').optional(true))
-            .help('Enqueue a track or resume queue')
-            .manual('Enqueue a track by its id or search for a track and enqueue the first match. When no track is provided it wil resume the queue.')
-            .checkPermission(requirePrivileges(PLAYBACK, ENQUEUE))
+            .help('Shows the current queue')
+            .manual('Shows all songs in the queue to play')
+            .checkPermission(requirePrivileges(PLAYBACK))
             .exec((client, args, reply, ev) => {
-                if (!args.idORsearchstring) {
-                    if (!audio.isPlaying()) {
-                        media.playQueueNext();
-                    }
-                    return;
+                let tracks = media.getQueue();
+                let response = tracks.map(formatResultTrackList).join("\n")
+                if (response == "") {
+                    response = "No songs in the queue."
                 }
-
-                let track = media.getTrackByID(args.idORsearchstring);
-                if (!track) {
-                    const tracks = media.search(args.idORsearchstring);
-                    if (tracks.length > 0) {
-                        track = tracks[0];
-                    } else {
-                        reply('Sorry, nothing found.');
-                        return;
-                    }
-                }
-
-                track.enqueue();
-                reply(`Added ${formatTrack(track)} to the queue`);
+                reply(response);
                 successReaction(ev, reply);
             });
 
             createCommand('queuenext')
-            .alias('qnext', 'qn')
+            .alias('playnext')
+            .alias('qnext', 'qn', 'pn')
             .addArgument(args => args.rest.setName('idORsearchstring', 'searchstring / uuid'))
             .help('Prepends a track to the queue')
             .manual('Prepends a track by its id or searches for a track and prepends the first match to the queue.')
@@ -594,8 +638,8 @@ registerPlugin({
                     }
                 }
 
-                track.enqueue();
-                reply(`Added ${formatTrack(track)} to the queue`);
+                track.addNext();
+                reply(`Added "${formatTrack(track)}" to the queue`);
                 successReaction(ev, reply);
             });
 
@@ -627,6 +671,12 @@ registerPlugin({
             .exec((client, args, reply, ev) => {
                 let value = args.value;
                 let volume = audio.getVolume();
+
+                if (!value) {
+                    reply(`Current volume is ${volume}`);
+                    successReaction(ev, reply);
+                    return;
+                }
 
                 switch (value) {
                 case 'up':
@@ -686,154 +736,154 @@ registerPlugin({
                 successReaction(ev, reply);
             });
 
-            createCommand('say')
-            .addArgument(args => args.rest.setName('text'))
-            .help('Say a text via TTS')
-            .manual('Uses text-to-speech (if configured) to say the given text.')
-            .checkPermission(requirePrivileges(PLAYBACK))
-            .exec((client, args, reply, ev) => {
-                // print syntax if no text given
-                if (!args.text) {
-                    reply(USAGE_PREFIX + 'say <text>');
-                    return;
-                }
+            // createCommand('say')
+            // .addArgument(args => args.rest.setName('text'))
+            // .help('Say a text via TTS')
+            // .manual('Uses text-to-speech (if configured) to say the given text.')
+            // .checkPermission(requirePrivileges(PLAYBACK))
+            // .exec((client, args, reply, ev) => {
+            //     // print syntax if no text given
+            //     if (!args.text) {
+            //         reply(USAGE_PREFIX + 'say <text>');
+            //         return;
+            //     }
 
-                audio.say(args.text);
-                successReaction(ev, reply);
-            });
+            //     audio.say(args.text);
+            //     successReaction(ev, reply);
+            // });
 
-            createCommand('sayex')
-            .addArgument(args => args.string.setName('locale'))
-            .addArgument(args => args.rest.setName('text'))
-            .help('Say a text via TTS with given locale')
-            .manual('Uses text-to-speech (if configured) to say the given text with a given locale.')
-            .checkPermission(requirePrivileges(PLAYBACK))
-            .exec((client, args, reply, ev) => {
-                // print syntax if no locale/text given
-                if (!args.locale || !args.text) {
-                    reply(USAGE_PREFIX + 'sayex <locale> <text>');
-                    return;
-                }
+            // createCommand('sayex')
+            // .addArgument(args => args.string.setName('locale'))
+            // .addArgument(args => args.rest.setName('text'))
+            // .help('Say a text via TTS with given locale')
+            // .manual('Uses text-to-speech (if configured) to say the given text with a given locale.')
+            // .checkPermission(requirePrivileges(PLAYBACK))
+            // .exec((client, args, reply, ev) => {
+            //     // print syntax if no locale/text given
+            //     if (!args.locale || !args.text) {
+            //         reply(USAGE_PREFIX + 'sayex <locale> <text>');
+            //         return;
+            //     }
 
-                audio.say(args.text, args.locale);
-                successReaction(ev, reply);
-            });
+            //     audio.say(args.text, args.locale);
+            //     successReaction(ev, reply);
+            // });
 
-            createCommand('ttsurl')
-            .addArgument(args => args.string.setName('url'))
-            .help('Set the TTS url.')
-            .manual('Sets the TTS url.')
-            .checkPermission(requirePrivileges(EDIT_BOT_SETTINGS))
-            .exec((client, args, reply, ev) => {
-                // print syntax if no url given
-                if (!args.url) {
-                    reply(USAGE_PREFIX + 'ttsurl <url>');
-                    return;
-                }
+            // createCommand('ttsurl')
+            // .addArgument(args => args.string.setName('url'))
+            // .help('Set the TTS url.')
+            // .manual('Sets the TTS url.')
+            // .checkPermission(requirePrivileges(EDIT_BOT_SETTINGS))
+            // .exec((client, args, reply, ev) => {
+            //     // print syntax if no url given
+            //     if (!args.url) {
+            //         reply(USAGE_PREFIX + 'ttsurl <url>');
+            //         return;
+            //     }
 
-                audio.setTTSURL(stripURL(args.url));
-                successReaction(ev, reply);
-            });
+            //     audio.setTTSURL(stripURL(args.url));
+            //     successReaction(ev, reply);
+            // });
 
-            createCommand('ttslocale')
-            .addArgument(args => args.string.setName('locale'))
-            .help('Set the TTS locale.')
-            .manual('Sets the TTS locale.')
-            .checkPermission(requirePrivileges(EDIT_BOT_SETTINGS))
-            .exec((client, args, reply, ev) => {
-                // print syntax if no locale given
-                if (!args.locale) {
-                    reply(USAGE_PREFIX + 'ttslocale <locale>');
-                    return;
-                }
+            // createCommand('ttslocale')
+            // .addArgument(args => args.string.setName('locale'))
+            // .help('Set the TTS locale.')
+            // .manual('Sets the TTS locale.')
+            // .checkPermission(requirePrivileges(EDIT_BOT_SETTINGS))
+            // .exec((client, args, reply, ev) => {
+            //     // print syntax if no locale given
+            //     if (!args.locale) {
+            //         reply(USAGE_PREFIX + 'ttslocale <locale>');
+            //         return;
+            //     }
 
-                audio.setTTSDefaultLocale(args.locale);
-                successReaction(ev, reply);
-            });
+            //     audio.setTTSDefaultLocale(args.locale);
+            //     successReaction(ev, reply);
+            // });
 
-            createCommand('yt')
-            .addArgument(args => args.string.setName('url'))
-            .help('Play <url> via youtube-dl')
-            .manual('Plays <url> via external youtube-dl (if enabled); beware: the file will be downloaded first and played back afterwards, so there might be a slight delay before playback starts.')
-            .checkPermission(requirePrivileges(PLAYBACK))
-            .exec((client, args, reply, ev) => {
-                const url = stripURL(args.url);
-                if (!url) return reply(USAGE_PREFIX + 'yt <url>');
-                if (!url.match(PATTERN_URL)) return reply(ERROR_PREFIX + 'Invalid URL.');
+            // createCommand('yt')
+            // .addArgument(args => args.string.setName('url'))
+            // .help('Play <url> via youtube-dl')
+            // .manual('Plays <url> via external youtube-dl (if enabled); beware: the file will be downloaded first and played back afterwards, so there might be a slight delay before playback starts.')
+            // .checkPermission(requirePrivileges(PLAYBACK))
+            // .exec((client, args, reply, ev) => {
+            //     const url = stripURL(args.url);
+            //     if (!url) return reply(USAGE_PREFIX + 'yt <url>');
+            //     if (!url.match(PATTERN_URL)) return reply(ERROR_PREFIX + 'Invalid URL.');
 
-                const jobId = media.yt(url);
-                ytCallback(jobId, (ytev, err) => {
-                    if (err) {
-                        // try to stream
-                        if (!media.ytStream(url)) {
-                            if (err.startsWith("exit status")) {
-                                return reply(ERROR_PREFIX + `Error: ${err}; Please see "Upload" page in web-interface for more details.`);
-                            }
-                            return reply(ERROR_PREFIX + `Error: ${err}`);
-                        }
-                    }
-                    successReaction(ev, reply);
-                });
-            });
+            //     const jobId = media.yt(url);
+            //     ytCallback(jobId, (ytev, err) => {
+            //         if (err) {
+            //             // try to stream
+            //             if (!media.ytStream(url)) {
+            //                 if (err.startsWith("exit status")) {
+            //                     return reply(ERROR_PREFIX + `Error: ${err}; Please see "Upload" page in web-interface for more details.`);
+            //                 }
+            //                 return reply(ERROR_PREFIX + `Error: ${err}`);
+            //             }
+            //         }
+            //         successReaction(ev, reply);
+            //     });
+            // });
 
-            createCommand('ytstream')
-            .alias('streamyt')
-            .addArgument(args => args.string.setName('url'))
-            .help('Stream <url> via youtube-dl')
-            .manual('Streams <url> via external youtube-dl (if enabled)')
-            .checkPermission(requirePrivileges(PLAYBACK))
-            .exec((client, args, reply, ev) => {
-                const url = stripURL(args.url);
-                if (!url) return reply(USAGE_PREFIX + 'ytstream <url>');
-                if (!url.match(PATTERN_URL)) return reply(ERROR_PREFIX + 'Invalid URL.');
+            // createCommand('ytstream')
+            // .alias('streamyt')
+            // .addArgument(args => args.string.setName('url'))
+            // .help('Stream <url> via youtube-dl')
+            // .manual('Streams <url> via external youtube-dl (if enabled)')
+            // .checkPermission(requirePrivileges(PLAYBACK))
+            // .exec((client, args, reply, ev) => {
+            //     const url = stripURL(args.url);
+            //     if (!url) return reply(USAGE_PREFIX + 'ytstream <url>');
+            //     if (!url.match(PATTERN_URL)) return reply(ERROR_PREFIX + 'Invalid URL.');
 
-                if (!media.ytStream(url)) {
-                    return reply(ERROR_PREFIX + 'Unable to stream this URL.');
-                }
-                successReaction(ev, reply);
-            });
+            //     if (!media.ytStream(url)) {
+            //         return reply(ERROR_PREFIX + 'Unable to stream this URL.');
+            //     }
+            //     successReaction(ev, reply);
+            // });
 
-            createCommand('ytdl')
-            .addArgument(args => args.string.setName('url'))
-            .help('Download and play <url> via youtube-dl')
-            .manual('Plays <url> via external youtube-dl (if enabled); beware: the file will be downloaded first and played back afterwards, so there might be a slight delay before playback starts; additionally, the file will be stored.')
-            .checkPermission(requirePrivileges(PLAYBACK|UPLOAD_FILES))
-            .exec((client, args, reply, ev) => {
-                const url = stripURL(args.url);
-                if (!url) return reply(USAGE_PREFIX + 'ytdl <url>');
-                if (!url.match(PATTERN_URL)) return reply(ERROR_PREFIX + 'Invalid URL.');
+            // createCommand('ytdl')
+            // .addArgument(args => args.string.setName('url'))
+            // .help('Download and play <url> via youtube-dl')
+            // .manual('Plays <url> via external youtube-dl (if enabled); beware: the file will be downloaded first and played back afterwards, so there might be a slight delay before playback starts; additionally, the file will be stored.')
+            // .checkPermission(requirePrivileges(PLAYBACK|UPLOAD_FILES))
+            // .exec((client, args, reply, ev) => {
+            //     const url = stripURL(args.url);
+            //     if (!url) return reply(USAGE_PREFIX + 'ytdl <url>');
+            //     if (!url.match(PATTERN_URL)) return reply(ERROR_PREFIX + 'Invalid URL.');
 
-                const jobId = media.ytdl(url, true);
-                handleYT(jobId, ev, reply);
-            });
+            //     const jobId = media.ytdl(url, true);
+            //     handleYT(jobId, ev, reply);
+            // });
 
-            createCommand('qyt')
-            .addArgument(args => args.string.setName('url'))
-            .help('Enqueue <url> via youtube-dl')
-            .manual('Enqueues <url> via external youtube-dl (if enabled); beware: the file will be downloaded first and played back afterwards, so there might be a slight delay before playback starts.')
-            .checkPermission(requirePrivileges(PLAYBACK, ENQUEUE))
-            .exec((client, args, reply, ev) => {
-                const url = stripURL(args.url);
-                if (!url) return reply(USAGE_PREFIX + 'qyt <url>');
-                if (!url.match(PATTERN_URL)) return reply(ERROR_PREFIX + 'Invalid URL.');
+            // createCommand('qyt')
+            // .addArgument(args => args.string.setName('url'))
+            // .help('Enqueue <url> via youtube-dl')
+            // .manual('Enqueues <url> via external youtube-dl (if enabled); beware: the file will be downloaded first and played back afterwards, so there might be a slight delay before playback starts.')
+            // .checkPermission(requirePrivileges(PLAYBACK, ENQUEUE))
+            // .exec((client, args, reply, ev) => {
+            //     const url = stripURL(args.url);
+            //     if (!url) return reply(USAGE_PREFIX + 'qyt <url>');
+            //     if (!url.match(PATTERN_URL)) return reply(ERROR_PREFIX + 'Invalid URL.');
 
-                const jobId = media.enqueueYt(url);
-                handleYT(jobId, ev, reply);
-            });
+            //     const jobId = media.enqueueYt(url);
+            //     handleYT(jobId, ev, reply);
+            // });
 
-            createCommand('qytdl')
-            .addArgument(args => args.string.setName('url'))
-            .help('Download and enqueue <url> via youtube-dl')
-            .manual('Enqueues <url> via external youtube-dl (if enabled); beware: the file will be downloaded first and played back afterwards, so there might be a slight delay before playback starts; additionally, the file will be stored.')
-            .checkPermission(requirePrivileges(PLAYBACK|UPLOAD_FILES, ENQUEUE|UPLOAD_FILES))
-            .exec((client, args, reply, ev) => {
-                const url = stripURL(args.url);
-                if (!url) return reply(USAGE_PREFIX + 'qytdl <url>');
-                if (!url.match(PATTERN_URL)) return reply(ERROR_PREFIX + 'Invalid URL.');
+            // createCommand('qytdl')
+            // .addArgument(args => args.string.setName('url'))
+            // .help('Download and enqueue <url> via youtube-dl')
+            // .manual('Enqueues <url> via external youtube-dl (if enabled); beware: the file will be downloaded first and played back afterwards, so there might be a slight delay before playback starts; additionally, the file will be stored.')
+            // .checkPermission(requirePrivileges(PLAYBACK|UPLOAD_FILES, ENQUEUE|UPLOAD_FILES))
+            // .exec((client, args, reply, ev) => {
+            //     const url = stripURL(args.url);
+            //     if (!url) return reply(USAGE_PREFIX + 'qytdl <url>');
+            //     if (!url.match(PATTERN_URL)) return reply(ERROR_PREFIX + 'Invalid URL.');
 
-                const jobId = media.enqueueYtdl(url);
-                handleYT(jobId, ev, reply);
-            });
+            //     const jobId = media.enqueueYtdl(url);
+            //     handleYT(jobId, ev, reply);
+            // });
 
             createCommand('shuffle')
             .help('Toggle shuffle')
@@ -1011,6 +1061,7 @@ registerPlugin({
             });
             
             createCommand('join')
+            .alias('summon')
             .help('Move the SinusBot to your channel')
             .manual('Moves the SinusBot into your channel.')
             .checkPermission(requirePrivileges(START_STOP))
@@ -1029,6 +1080,7 @@ registerPlugin({
 
             if (engine.getBackend() == 'discord') {
                 createCommand('leave')
+                .alias('disconnect')
                 .help('Disconnect the SinusBot')
                 .manual('Disconnects the SinusBot from the current voice channel.')
                 .checkPermission(requirePrivileges(START_STOP))
@@ -1361,6 +1413,16 @@ registerPlugin({
     }
 
     /**
+     * Returns a formatted string from a indexed track.
+     *
+     * @param {Track} track
+     * @returns {string} formatted string
+     */
+    function formatResultTrackList(track, index) {
+        return `${index+1}. ${formatTrack(track)}`
+    }
+
+    /**
      * Removes TeamSpeaks URL bb-code or Discords < > from a given string.
      *
      * @param {string} str
@@ -1575,3 +1637,4 @@ registerPlugin({
         });
     }
 })
+
