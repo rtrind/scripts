@@ -497,7 +497,7 @@ registerPlugin({
             createCommand('play')
             .alias('p')
             .addArgument(args => args.rest.setName('whattoplay', 'searchstring / uuid / url'))
-            .help('Play a track by its id, name or URL')
+            .help('Play a track by its id, name or url')
             .manual('Plays a track by its id or searches for a track and plays the first match.')
             .checkPermission(requirePrivileges(PLAYBACK))
             .exec((client, args, reply, ev) => {
@@ -614,8 +614,7 @@ registerPlugin({
             });
 
             createCommand('queuenext')
-            .alias('playnext')
-            .alias('qnext', 'qn', 'pn')
+            .alias('qnext', 'qn', 'playnext', 'pn')
             .addArgument(args => args.rest.setName('idORsearchstring', 'searchstring / uuid'))
             .help('Prepends a track to the queue')
             .manual('Prepends a track by its id or searches for a track and prepends the first match to the queue.')
@@ -665,7 +664,7 @@ registerPlugin({
             createCommand('volume')
             .alias('vol')
             .addArgument(args => args.string.setName('value'))
-            .help('Change or show volume')
+            .help('Show or change the volume')
             .manual('Shows or changes the current volume level.')
             .checkPermission(requirePrivileges(PLAYBACK))
             .exec((client, args, reply, ev) => {
