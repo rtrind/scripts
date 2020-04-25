@@ -56,7 +56,7 @@
  */
 registerPlugin({
     name: 'SinusBot Commands',
-    version: '1.1.2',
+    version: '1.1.2.2',
     description: 'Enables the default commands.',
     author: 'Jonas Bögle (@irgendwr)',
     engine: '>= 1.0.0',
