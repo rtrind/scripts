@@ -81,7 +81,7 @@ registerPlugin({
             name: 'createSuccessReaction',
             title: 'Add a reaction to each command if it was successfull.',
             type: 'checkbox',
-            default: false,
+            default: true,
             /* conditions: [
                 { field: 'disable', value: false }
             ], */ // conditions checking for "false" are currently buggy. @flyth needs to fix this.
@@ -541,9 +541,10 @@ registerPlugin({
             });
 
             createCommand('playlist')
+            .alias('pl')
             .addArgument(args => args.rest.setName('playlistname'))
             .help('Start playing back the playlist <playlistname>')
-            .manual('starts playing back the playlist <playlistname>.')
+            .manual('Starts playing back the playlist <playlistname>. It will abruptly stop the current music.')
             .checkPermission(requirePrivileges(PLAYBACK))
             .exec((client, args, reply, ev) => {
                 // print syntax if no playlistname given
@@ -1092,6 +1093,16 @@ registerPlugin({
                     successReaction(ev, reply);
                 });
             }
+
+            createCommand('playlists')
+            .alias('pls')
+            .help('List available playlists')
+            .manual('List all available playlists in the server.')
+            .checkPermission(requirePrivileges(PLAYBACK))
+            .exec((client, args, reply, ev) => {
+                reply(media.getPlaylists().map(pl => pl.name()).filter(pl => pl != 'Autoplaylist').sort().join('\n'));
+                successReaction(ev, reply);
+            });
         });
     } // END COMMANDS-ENABLED
 
