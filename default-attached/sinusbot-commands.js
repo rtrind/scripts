@@ -53,10 +53,12 @@
      - 'ytdl'
      - 'qyt'
      - 'qytdl'
+*    Added commands
+     - 'playlists'
  */
 registerPlugin({
     name: 'SinusBot Commands',
-    version: '1.1.2.2',
+    version: '1.1.2.3',
     description: 'Enables the default commands.',
     author: 'Jonas Bögle (@irgendwr)',
     engine: '>= 1.0.0',
@@ -1101,7 +1103,6 @@ registerPlugin({
             .checkPermission(requirePrivileges(PLAYBACK))
             .exec((client, args, reply, ev) => {
                 reply(media.getPlaylists().map(pl => pl.name()).filter(pl => pl != 'Autoplaylist').sort().join('\n'));
-                successReaction(ev, reply);
             });
         });
     } // END COMMANDS-ENABLED
@@ -1647,4 +1648,3 @@ registerPlugin({
         });
     }
 })
-
