@@ -43,6 +43,8 @@
  *   'queue' now shows the queue list instead of modifiying the queue
  *   'queuenext' now properly adds the song to the top of the queue. Unfortunately I found no way of queueing something from ytdl, so no support for this yet
  *   'volume' now shows the current volume if no parameter is informed
+ *   'playlist' now replies if the shuffle mode is engaged or not
+ *   'playlist' also starts the playlist in a random song if shuffle mode is engaged instead of the first one
  *   Removed commands
      - 'say'
      - 'sayex'
@@ -55,10 +57,11 @@
      - 'qytdl'
 *    Added commands
      - 'playlists'
+     - 'remove'
  */
 registerPlugin({
     name: 'SinusBot Commands',
-    version: '1.1.2.3',
+    version: '1.1.2.4',
     description: 'Enables the default commands.',
     author: 'Jonas Bögle (@irgendwr)',
     engine: '>= 1.0.0',
@@ -134,6 +137,7 @@ registerPlugin({
     const format = require('format')
     const audio = require('audio')
     const media = require('media')
+    const helpers = require('helpers')
 
     engine.log(`Loaded ${meta.name} v${meta.version} by ${meta.author}.`)
     engine.log(`SinusBot v${engine.version()} on ${engine.os()}`)
@@ -156,7 +160,7 @@ registerPlugin({
 
     const ERROR_PREFIX = '❌ ';
     const WARNING_PREFIX = '⚠ ';
-    const SUCCESS_PREFIX = '✔ ';
+    const SUCCESS_PREFIX = '✅ ';
     const USAGE_PREFIX = ERROR_PREFIX + 'Usage: ';
 
     const sinusbotURL = config.url;
@@ -566,9 +570,12 @@ registerPlugin({
                     return;
                 }
                 
-                media.playlistPlayByID(match, 0);
-
-                successReaction(ev, reply);
+                tindex = 0;
+                if (audio.isShuffle()) {
+                    tindex = helpers.getRandom(match.getTracks().length);
+                }
+                media.playlistPlayByID(match, tindex);
+                reply(SUCCESS_PREFIX + `Playlist is now active. Shuffle mode is *${audio.isShuffle() ? 'ON' : 'OFF'}*.`);
             });
 
             // createCommand('queue')
@@ -608,9 +615,9 @@ registerPlugin({
             .checkPermission(requirePrivileges(PLAYBACK))
             .exec((client, args, reply, ev) => {
                 let tracks = media.getQueue();
-                let response = tracks.map(formatResultTrackList).join("\n")
+                let response = tracks.map(formatResultTrackList).join("\n");
                 if (response == "") {
-                    response = "No songs in the queue."
+                    response = "No songs in the queue.";
                 }
                 reply(response);
                 successReaction(ev, reply);
@@ -1103,6 +1110,26 @@ registerPlugin({
             .checkPermission(requirePrivileges(PLAYBACK))
             .exec((client, args, reply, ev) => {
                 reply(media.getPlaylists().map(pl => pl.name()).filter(pl => pl != 'Autoplaylist').sort().join('\n'));
+            });
+
+            createCommand('remove')
+            .addArgument(args => args.string.setName('trackindex'))
+            .alias('rm')
+            .help('Remove a track from the queue')
+            .manual('Remove a track using its position from the queue.')
+            .checkPermission(requirePrivileges(PLAYBACK))
+            .exec((client, args, reply, ev) => {
+                let tindex = parseInt(args.trackindex, 10);
+                let queueSize = media.getQueue().length;
+
+                if (!tindex || tindex < 1 || tindex > queueSize) {
+                    reply(USAGE_PREFIX + 'remove <track index>');
+                    return;
+                } 
+                
+                let track = media.getQueue()[tindex - 1];
+                reply(SUCCESS_PREFIX + `Track "${formatTrack(track)}" removed from queue`);
+                media.removeFromQueue(tindex - 1);
             });
         });
     } // END COMMANDS-ENABLED
@@ -1648,3 +1675,4 @@ registerPlugin({
         });
     }
 })
+
